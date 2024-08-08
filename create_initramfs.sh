@@ -68,16 +68,16 @@ mkdir -p /run/image/rw/work
 
 uuid=$(xargs -n1 -a /proc/cmdline | sed '/^mountid/!d' | sed 's/.*=//g')
 device=$(blkid | sed -n "/${uuid}/p" | sed 's/:.*//g')
-timeout 30
+time_out=30
 while [ -z "$device" ]
 do
-if [ $timeout == 0 ]
+if [ $time_out == 0 ]
 then
 break
 else
-timeout=$((timeout - 1))
+time_out=$((time_out - 1))
 fi
-sleep 0.5
+sleep 0.2
 device=$(blkid | sed -n "/${uuid}/p" | sed 's/:.*//g')
 done
 mount -t ext4 $device /mnt/cdrom
