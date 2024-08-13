@@ -22,38 +22,41 @@ echo "LiveLinux" > root.x86_64/etc/hostname
 cp /etc/resolv.conf $PWD/root.x86_64/etc
 mount --types proc /proc $PWD/root.x86_64/proc
 
-mount --rbind /sys $PWD/root.x86_64/sys
-mount --make-rslave $PWD/root.x86_64/sys
+mount --rbind --make-slave /sys $PWD/root.x86_64/sys
+#mount --make-rslave $PWD/root.x86_64/sys
 
-mount --rbind /dev $PWD/root.x86_64/dev
-mount --make-rslave $PWD/root.x86_64/dev
+mount --rbind --make-slave /dev $PWD/root.x86_64/dev
+#mount --make-rslave $PWD/root.x86_64/dev
 
-mount --bind /run $PWD/root.x86_64/run
-mount --make-rslave $PWD/root.x86_64/run
+mount --rbind --make-slave /run $PWD/root.x86_64/run
+#mount --make-rslave $PWD/root.x86_64/run
 
 chroot root.x86_64 /bin/bash -c "pacman-key --init"
 chroot root.x86_64 /bin/bash -c "pacman-key --populate archlinux"
 chroot root.x86_64 /bin/bash -c "ln -sf /usr/share/zoneinfo/Europe/Bucharest /etc/localtime"
 chroot root.x86_64 /bin/bash -c "locale-gen"
-chroot root.x86_64 /bin/bash -c "pacman -Syu"
-chroot root.x86_64 /bin/bash -c "pacman -Sy linux linux-firmware zstd bash-completion vim htop acpi acpid lm_sensors fastfetch squashfs-tools mtools dosfstools ntfs-3g wpa_supplicant wireless_tools iwd networkmanager dhcpcd grub efibootmgr os-prober busybox cpio intel-ucode pacman-contrib reflector"
+chroot root.x86_64 /bin/bash -c "pacman -Syu linux linux-firmware mkinitcpio cpio zstd bash-completion vim htop acpi acpid lm_sensors fastfetch squashfs-tools mtools dosfstools ntfs-3g wpa_supplicant wireless_tools iwd networkmanager dhcpcd grub efibootmgr os-prober busybox cpio intel-ucode pacman-contrib reflector mc --noconfirm"
 chroot root.x86_64 /bin/bash -c "systemctl enable acpid"
 chroot root.x86_64 /bin/bash -c "systemctl enable dhcpcd"
 chroot root.x86_64 /bin/bash -c "systemctl enable iwd"
 chroot root.x86_64 /bin/bash -c "systemctl enable NetworkManager"
+chroot root.x86_64 /bin/bash -c "systemctl disable systemd-networkd"
+
 chroot root.x86_64 /bin/bash -c "passwd root"
 chroot root.x86_64 /bin/bash -c "/root/create_initramfs.sh"
-chroot root.x86_64 /bin/bash -c "pacman -Scc"
+chroot root.x86_64 /bin/bash -c "yes|pacman -Scc"
 
 
 cp root.x86_64/initramfs.img $initialpath
 cp root.x86_64/boot/vmlinuz-linux $initialpath
 cp root.x86_64/boot/intel-ucode.img $initialpath
 
+rm -rf root.x86_64/boot/init* 
+rm -rf root.x86_64/boot/vmlinuz* 
+rm -rf root.x86_64/boot/intel*
+rm -rf root.x86_64/root/create_initramfs.sh
 rm -rf root.x86_64/initramfs
 rm -rf root.x86_64/initramfs.img
 
 root.x86_64/bin/mksquashfs root.x86_64 $initialpath/rootfs.sfs -wildcards -e  dev/* proc/* sys/* run/*
-
-
 
