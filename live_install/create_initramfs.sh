@@ -144,7 +144,7 @@ sleep 0.5
 device=$(blkid | sed -n "/${uuid}/p" | sed 's/:.*//g')
 done
 mount -t ext4 $device /mnt/cdrom
-mount -t squashfs -o defaults,ro /mnt/cdrom/rootfs.sfs /run/image/ro
+mount -t squashfs -o defaults,ro /mnt/cdrom/live-install/rootfs.sfs /run/image/ro
 mount -t overlay -o lowerdir=/run/image/ro,upperdir=/run/image/rw/data,workdir=/run/image/rw/work overlay /new_root
 udevadm control --exit
 udevadm info --cleanup-db

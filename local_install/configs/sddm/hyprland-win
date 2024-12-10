@@ -1,0 +1,19 @@
+monitor=,preffered,auto,1
+misc {
+    disable_hyprland_logo = true
+    disable_splash_rendering = true
+    force_default_wallpaper = 0
+    initial_workspace_tracking=1
+}
+
+input {
+numlock_by_default = true
+}
+
+cursor {
+no_warps = 1
+}
+
+# This rules only apply when using xdg-shell https://wiki.archlinux.org/title/SDDM#Wayland
+windowrulev2 = workspace emptym,fullscreen, stayfocused, decorate 0, noanim, noborder, nodim, norounding, noshadow, class:^(sddm-greeter)$
+exec-once = hyprctl setcursor Bibata-Modern-Ice 24
