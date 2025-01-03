@@ -19,6 +19,8 @@ echo -e "en_US.UTF-8 UTF-8\nro_RO.UTF-8 UTF-8\n" > root.x86_64/etc/locale.gen
 echo -e "LANG=en_US.UTF-8\n" > root.x86_64/etc/locale.conf
 echo "LiveLinux" > root.x86_64/etc/hostname
 cp /etc/resolv.conf $PWD/root.x86_64/etc
+arch-chroot root.x86_64 /bin/bash -c "ln -sf /usr/share/zoneinfo/Europe/Bucharest /etc/localtime"
+arch-chroot root.x86_64 /bin/bash -c "locale-gen"
 arch-chroot root.x86_64 /bin/bash -c "pacman-key --init"
 arch-chroot root.x86_64 /bin/bash -c "pacman-key --populate archlinux"
 arch-chroot root.x86_64 /bin/bash -c "curl https://mirror.cachyos.org/cachyos-repo.tar.xz -o root/cachyos-repo.tar.xz"
@@ -29,6 +31,7 @@ tar xvf cachyos-repo.tar.xz
 cd cachyos-repo
 sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
 ./cachyos-repo.sh
+sed -i 's/^#\[multilib\]/\[multilib\]\nInclude = \/etc\/pacman.d\/mirrorlist\n/' /etc/pacman.conf
 EOF
 chmod +x root.x86_64/install-repos.sh
 arch-chroot root.x86_64 /bin/bash -c "./install-repos.sh"
@@ -39,6 +42,7 @@ rm -rf root.x86_64/root/cachyos-repo.tar.xz
 
 arch-chroot root.x86_64 /bin/bash -c "pacman -Sy cachyos-rate-mirrors"
 arch-chroot root.x86_64 /bin/bash -c "cachyos-rate-mirrors"
+arch-chroot root.x86_64 /bin/bash -c "pacman -Sy pacman"
 
 arch-chroot root.x86_64 /bin/bash -c "pacman -Sy base base-devel linux-cachyos linux-firmware intel-ucode pacman-contrib archinstall arch-install-scripts squashfs-tools grub efivar efibootmgr os-prober vim mc htop acpid acpi lm_sensors fastfetch git mtools dosfstools ntfs-3g wireless_tools iwd networkmanager dhcpcd busybox cpio mkinitcpio mkinitcpio-utils cachyos-settings cachyos-hooks"
 arch-chroot root.x86_64 /bin/bash -c "systemctl enable acpid"
