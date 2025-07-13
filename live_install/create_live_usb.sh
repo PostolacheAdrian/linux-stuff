@@ -28,7 +28,7 @@ set default=0
 set timeout=15
 menuentry "Linux Live Environment x64" {
 search --no-floppy --fs-uuid --set=root ${uuid}  
-linux /boot/vmlinuz-linux mountid=${uuid} busybox=OFF
+linux /boot/vmlinuz-linux mountid=${uuid} busybox=OFF usbcore.autosuspend=-1 nowatchdog zswap.enabled=0 splash
 initrd /boot/intel-ucode.img /boot/initramfs.img
 }
 EOF
