@@ -1,6 +1,6 @@
 #!/bin/sh
-cmds=('echo salut' 'echo adi')
+cmds=('echo salut' 'echo welcome')
 for cm in "${cmds[@]}";
 do
-	/calnau/$cm
+	$cm
 done

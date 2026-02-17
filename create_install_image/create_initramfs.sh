@@ -5,12 +5,32 @@ if [ -d initramfs ]; then
     rm -rf initramfs
 fi
 
+#Required modules
+MODULES_TO_LOAD="nvme ahci xhci_pci usb-storage ext4 sd_mod scsi_mod loop overlay squashfs atkbd ahci i8042 hid usbhid hid_generic"
+
 #Create working folder
 mkdir initramfs
 cd initramfs
 
 #Create folders structure
-mkdir -p dev etc root new_root sys proc usr/bin /usr/sbin usr/lib/modules usr/lib/systemd mnt run tmp var opt
+mkdir -p dev etc root new_root sys proc usr/bin /usr/sbin usr/lib/modules usr/lib/modules/$KERNEL_VERSION usr/lib/systemd mnt run tmp var opt
+
+copy_module(){
+	local name=$1
+	local dependencies=$(/usr/sbin/modprobe --show-depends $name --set-version $KERNEL_VERSION 2>/dev/null | sed -E '/^builtin/d' | sed -E 's/insmod//g')
+    if [ -z "$dependencies" ]; then
+        echo "Module: $name is builtin"
+        return
+    fi
+    for file in $dependencies; do
+            local source=${file#*/lib/modules/$KERNEL_VERSION/}
+            local destination=usr/lib/modules/$KERNEL_VERSION/$source
+            mkdir -p $(dirname $destination)
+            cp $file $destination
+    done
+}
+
+
 
 #Create the symlinks
 ln -s usr/bin bin
@@ -42,8 +62,14 @@ nobody:x:65534:
 EOF
 
 #Copy kernel modules and additional firmware
-cp -r /usr/lib/modules/$KERNEL_VERSION usr/lib/modules
-cp -r /usr/lib/firmware usr/lib
+
+for module in $MODULES_TO_LOAD; do
+    copy_module $module
+    done
+cp /lib/modules/$KERNEL_VERSION/modules.order lib/modules/$KERNEL_VERSION
+cp /lib/modules/$KERNEL_VERSION/modules.builtin lib/modules/$KERNEL_VERSION
+cp /lib/modules/$KERNEL_VERSION/modules.builtin.modinfo lib/modules/$KERNEL_VERSION
+
 depmod -b $PWD ${KERNEL_VERSION}
 shopt -s extglob
 rm usr/lib/modules/${KERNEL_VERSION}/modules.!(*.bin|devname|softdep)
@@ -80,7 +106,7 @@ cd usr/lib/systemd
 ln -s /usr/bin/udevadm systemd-udevd
 cd ../../..
 #Create init file
-cat > init << "EOF"
+cat > init << EOF
 #!/bin/sh
 #Export the path
 export PATH='/usr/bin:/usr/sbin'
@@ -111,16 +137,15 @@ udevadm trigger --action=add
 udevadm settle > /tmp/udev_done
 
 if [ -f /tmp/udev_done ]; then
-grep -h "MODALIAS\|DRIVER" /sys/bus/*/devices/*/uevent | cut -d= -f2 | xargs /usr/sbin/modprobe -abq 2> /dev/null
 #grep -h "MODALIAS\|DRIVER" /sys/bus/*/devices/*/uevent | cut -d= -f2 | xargs /usr/sbin/modprobe -abq 2> /dev/null
-/usr/sbin/modprobe -abq loop
-/usr/sbin/modprobe -abq squashfs
-/usr/sbin/modprobe -abq overlay
+#grep -h "MODALIAS\|DRIVER" /sys/bus/*/devices/*/uevent | cut -d= -f2 | xargs /usr/sbin/modprobe -abq 2> /dev/null
+/usr/sbin/modprobe -abq $MODULES_TO_LOAD
+
 fi
 
 #Execute the shell
-busybox_req=$(xargs -n1 -a /proc/cmdline | sed '/^busybox/!d' | sed 's/.*=//g')
-if [ "$busybox_req" == "ON" ]
+busybox_req=\$(xargs -n1 -a /proc/cmdline | sed '/^busybox/!d' | sed 's/.*=//g')
+if [ "\$busybox_req" == "ON" ]
 then
 exec /bin/sh
 else
@@ -129,21 +154,21 @@ mkdir -p /mnt/cdrom
 mkdir -p /run/image/ro
 mkdir -p /run/image/rw/data
 mkdir -p /run/image/rw/work
-uuid=$(xargs -n1 -a /proc/cmdline | sed '/^mountid/!d' | sed 's/.*=//g')
-device=$(blkid | sed -n "/${uuid}/p" | sed 's/:.*//g')
+uuid=\$(xargs -n1 -a /proc/cmdline | sed '/^mountid/!d' | sed 's/.*=//g')
+device=\$(blkid | sed -n "/\${uuid}/p" | sed 's/:.*//g')
 time_out=120
-while [ -z "$device" ]
+while [ -z "\$device" ]
 do
-if [ $time_out == 0 ]
+if [ \$time_out == 0 ]
 then
 break
 else
-time_out=$((time_out - 1))
+time_out=\$((time_out - 1))
 fi
 sleep 0.5
-device=$(blkid | sed -n "/${uuid}/p" | sed 's/:.*//g')
+device=\$(blkid | sed -n "/\${uuid}/p" | sed 's/:.*//g')
 done
-mount -t ext4 $device /mnt/cdrom
+mount -t ext4 \$device /mnt/cdrom
 mount -t squashfs -o defaults,ro /mnt/cdrom/live-install/rootfs.sfs /run/image/ro
 mount -t overlay -o lowerdir=/run/image/ro,upperdir=/run/image/rw/data,workdir=/run/image/rw/work overlay /new_root
 udevadm control --exit
@@ -153,10 +178,9 @@ mount -n -o move /tmp /new_root/tmp
 mount -n -o move /dev /new_root/dev
 mount -n -o move /sys /new_root/sys
 mount -n -o move /proc /new_root/proc
-exec switch_root -c /dev/console /new_root /sbin/init "$@"
+exec switch_root -c /dev/console /new_root /sbin/init "\$@"
 fi
 EOF
 chmod +x init
 find . | cpio -oH newc | zstd -T0 -3 > ../initramfs.img
 cd ..
-

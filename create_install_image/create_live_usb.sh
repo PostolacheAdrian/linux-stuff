@@ -17,21 +17,7 @@ mkdir -p mnt/boot/efi
 mount $1 mnt/boot/efi
 echo "Installing grub bootloader ..."
 grub-install --target=x86_64-efi -d /usr/lib/grub/x86_64-efi --removable --efi-directory=mnt/boot/efi --boot-directory=mnt/boot --bootloader-id=LinuxLive 1>/dev/null
-cat > mnt/boot/grub/grub.cfg << EOF 
-insmod all_video
-insmod part_msdos
-insmod part_gpt
-insmod ext2
-insmod sfs
-insmod squash4
-set default=0
-set timeout=15
-menuentry "Linux Live Environment x64" {
-search --no-floppy --fs-uuid --set=root ${uuid}  
-linux /boot/vmlinuz-linux mountid=${uuid} busybox=OFF usbcore.autosuspend=-1 nowatchdog zswap.enabled=0 splash
-initrd /boot/intel-ucode.img /boot/initramfs.img
-}
-EOF
+
 echo "Copying boot files ..."
 cp initramfs.img mnt/boot
 cp vmlinuz-linux mnt/boot

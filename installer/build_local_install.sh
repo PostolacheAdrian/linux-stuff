@@ -31,7 +31,7 @@ mount --bind $rootFsPath/root.x86_64 $rootFsPath/root.x86_64
 echo "Copying configuration files ..."
 cp create_initramfs.sh $rootFsPath/root.x86_64/root
 echo -e "en_US.UTF-8 UTF-8\nro_RO.UTF-8 UTF-8\n" > $rootFsPath/root.x86_64/etc/locale.gen
-echo -e "LANG=en_US.UTF-8\n" > $rootFsPath/root.x86_64/etc/locale.conf
+echo -e "LANG=en_US.UTF-8\nLC_ALL=C\n" > $rootFsPath/root.x86_64/etc/locale.conf
 echo "LiveLinux" > $rootFsPath/root.x86_64/etc/hostname
 cp /etc/resolv.conf $rootFsPath/root.x86_64/etc
 
@@ -58,11 +58,11 @@ systemctl --root $rootFsPath/root.x86_64 enable acpid
 systemctl --root $rootFsPath/root.x86_64 enable dhcpcd
 systemctl --root $rootFsPath/root.x86_64 enable NetworkManager
 systemctl --root $rootFsPath/root.x86_64 enable systemd-timesyncd
-systemctl --root $rootFsPath/root.x86_64 disable systemd-nsresourced.service
-systemctl --root $rootFsPath/root.x86_64 disable systemd-networkd.service
-systemctl --root $rootFsPath/root.x86_64 disable systemd-homed.service
-systemctl --root $rootFsPath/root.x86_64 disable systemd-userdbd.service
-systemctl --root $rootFsPath/root.x86_64 disable ananicy-cpp.service
+systemctl --root $rootFsPath/root.x86_64 mask systemd-nsresourced.service
+systemctl --root $rootFsPath/root.x86_64 mask systemd-networkd.service
+systemctl --root $rootFsPath/root.x86_64 mask systemd-homed.service
+systemctl --root $rootFsPath/root.x86_64 mask systemd-userdbd.service
+systemctl --root $rootFsPath/root.x86_64 mask ananicy-cpp.service
 sed -i -e '/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/s/^# //' $rootFsPath/root.x86_64/etc/sudoers
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "useradd -m -G wheel live"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "usermod -p \"$user_pass\" live"

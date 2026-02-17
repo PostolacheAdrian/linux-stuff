@@ -16,7 +16,7 @@ set default=0
 set timeout=15
 menuentry "Linux Live Environment x64" {
 search --no-floppy --fs-uuid --set=root ${uuid}  
-linux /live-install/vmlinuz-linux-cachyos mountid=${uuid} busybox=OFF usbcore.autosuspend=-1 nowatchdog zswap.enabled=0 splash
+linux /live-install/vmlinuz-linux mountid=${uuid} busybox=OFF usbcore.autosuspend=-1 nowatchdog loglevel=2 zswap.enabled=0 quiet
 initrd /live-install/intel-ucode.img /live-install/initramfs.img
 }
 EOF
