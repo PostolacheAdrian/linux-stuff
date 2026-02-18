@@ -1,8 +1,29 @@
 #!/bin/bash
 set -Eeuo pipefail
-destination=$1
-destinationPath=/home/live-install
-rootFsPath=/home/rootfs
+#check if there is root privilege
+if [ "$(id -u)" -ne 0 ]; then
+        echo 'This script must be run by root' >&2
+        exit 1
+fi
+
+if [[ $# -lt 1 ]]; then
+        echo -e "Error:\n\tYou should specify where it goes to final output:\n\ttmpfs - the output folder will be mounted in tmpfs\n\tstorage - the output folder will be on the disk" >&2
+        exit 1
+else
+        if [[ "$1" == "storage" || "$1" == "tmpfs" ]]; then
+                destination="$1"
+        else
+                echo -e "Error:\n\t\"$1\" is a bad argument\n\tUse tmpfs or storage" >&2
+                exit 1
+        fi
+fi
+if [[ "$destination" == "storage" ]]; then
+        destinationPath=/home/live-install
+else
+        destinationPath=live-install
+fi
+
+rootFsPath=rootfs
 user_pass="\\\$6\\\$tQk2hzssD/a0tbe1\\\$bEnhqTMyzyhBJdRPKEUrku0iMFLSwMbpoGqU5vE07d7Toe37JYqAgzxRsTtOc1RNEWMvHmzutR7m22OlZA/ao/"
 download_file=archlinux-bootstrap-x86_64.tar.zst
 cleanup(){
@@ -21,12 +42,6 @@ error_handler() {
 
 trap 'error_handler $? $LINENO "$BASH_COMMAND"' ERR
 
-
-if [ "$(id -u)" -ne 0 ]; then
-        echo 'This script must be run by root' >&2
-        exit 1
-fi
-
 mkdir -p $rootFsPath
 if [ -d $destinationPath ] 
 then
@@ -38,7 +53,7 @@ echo "Creating directory $rootFsPath"
 mkdir -p $destinationPath
 echo "Mounting $rootFsPath as tmpfs"
 mount -t tmpfs $rootFsPath $rootFsPath
-if [["$destination" == "tmpfs"]];then
+if [[ "$destination" == "tmpfs" ]];then
 mount -t tmpfs $destinationPath $destinationPath
 fi
 echo "Downloading arch bootstrap ..."
@@ -91,11 +106,11 @@ mv $rootFsPath/root.x86_64/boot/vmlinuz-linux $destinationPath
 rm -rf $rootFsPath/root.x86_64/initramfs
 rm -rf $rootFsPath/root.x86_64/root/*
 rm -rf $rootFsPath/root.x86_64/boot/*
-cp -r ../create_install_image $rootFsPath/root.x86_64/root
+mkdir -p $rootFsPath/root.x86_64/root/create_install_image
+cp  *.sh $rootFsPath/root.x86_64/root/create_install_image
 cp -r ../installer $rootFsPath/root.x86_64/root
-#cp -r ../dotfiles $rootFsPath/root.x86_64/root/
+cp -r ../utils $rootFsPath/root.x86_64/root/
 $rootFsPath/root.x86_64/bin/mksquashfs $rootFsPath/root.x86_64 $destinationPath/rootfs.sfs -wildcards -e  dev/* proc/* sys/* run/*
 umount -R $rootFsPath/root.x86_64
 umount -R $rootFsPath
 rm -rf $rootFsPath
-

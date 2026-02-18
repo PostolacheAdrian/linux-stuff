@@ -15,6 +15,7 @@ cd initramfs
 #Create folders structure
 mkdir -p dev etc root new_root sys proc usr/bin /usr/sbin usr/lib/modules usr/lib/modules/$KERNEL_VERSION usr/lib/systemd mnt run tmp var opt
 
+#The function search for a specific module and its dependencies and copies to the initramfs
 copy_module(){
 	local name=$1
 	local dependencies=$(/usr/sbin/modprobe --show-depends $name --set-version $KERNEL_VERSION 2>/dev/null | sed -E '/^builtin/d' | sed -E 's/insmod//g')
@@ -29,8 +30,6 @@ copy_module(){
             cp $file $destination
     done
 }
-
-
 
 #Create the symlinks
 ln -s usr/bin bin
@@ -62,20 +61,19 @@ nobody:x:65534:
 EOF
 
 #Copy kernel modules and additional firmware
-
 for module in $MODULES_TO_LOAD; do
     copy_module $module
     done
 cp /lib/modules/$KERNEL_VERSION/modules.order lib/modules/$KERNEL_VERSION
 cp /lib/modules/$KERNEL_VERSION/modules.builtin lib/modules/$KERNEL_VERSION
 cp /lib/modules/$KERNEL_VERSION/modules.builtin.modinfo lib/modules/$KERNEL_VERSION
-
 depmod -b $PWD ${KERNEL_VERSION}
 shopt -s extglob
 rm usr/lib/modules/${KERNEL_VERSION}/modules.!(*.bin|devname|softdep)
 
-#Copy binaries
+#Required binaries
 binfiles="blkid mount kmod lsmod udevadm insmod rmmod modprobe depmod systemd-dissect systemd-tmpfiles"
+
 #Copy /bin files and libraries
 for f in $binfiles; do
 	cp -a /bin/$f usr/bin
@@ -182,5 +180,6 @@ exec switch_root -c /dev/console /new_root /sbin/init "\$@"
 fi
 EOF
 chmod +x init
+#Create the initramfs image
 find . | cpio -oH newc | zstd -T0 -3 > ../initramfs.img
 cd ..
