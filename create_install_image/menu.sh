@@ -79,15 +79,18 @@ select_bootloader(){
 
 
 create_installer(){
-    max_height=$(tput lines)
-    max_width=$(tput cols)
-    bash ./create_image.sh tmpfs 2>&1 | tee out.log | dialog --clear --title " Installing... " --progressbox "Live Installation:" $max_height $max_width
-    if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
-        dialog --title " Success " --msgbox "Images have been created !" 6 50
+    local max_height=$(tput lines)
+    local max_width=$(tput cols)
+    if [[ $# -gt 0 ]]; then
+        stdbuf -oL -eL bash ./create_image.sh tmpfs $1 $2 2>&1 | tee out.log | dialog --clear --title " Installing... " --progressbox "Live Installation:" $max_height $max_width
+        if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
+            dialog --title " Success " --msgbox "Images have been created !" 6 50
+        else
+            dialog --title " Failed " --msgbox "Error ocurred! Check out.log file." 6 50
+        fi
     else
-        dialog --title " Failed " --msgbox "Error ocurred! Check out.log file." 6 50
+        dialog --title " Error " --msgbox "Please specify the Linux installer path !" 6 50
     fi
-    umount -R live-install
 }
 
 specify_destination_path(){
@@ -133,7 +136,7 @@ main_choice=$(dialog --clear --title " Create Linux Installer " --menu "Configur
         2) select_partition ROOT_PARTITION "ROOT partition" ;;
         3) select_bootloader BOOTLOADER_TYPE "Bootloader" ;;
         4) specify_destination_path DESTINATION_PATH ;;
-        5) create_installer ;;
+        5) create_installer $DESTINATION_PATH $BOOTLOADER_TYPE ;;
         6) install_to_drive ;;
         7) break ;;
     esac

@@ -1,6 +1,6 @@
 #!/bin/bash
 #function generates Limine bootloader configuration
-#param1: - root partition needed to get UUID required for initramfs
+#param1: - rootfs image partition needed to get UUID required for initramfs
 #param2: - location where limine.conf file will be created.
 generate_limine_configuration()
 if [[ $# -lt 2 ]];then
@@ -26,7 +26,7 @@ EOF
 fi
 
 #function generates GRUB bootloader configuration
-#param1: - root partition needed to get UUID required for initramfs
+#param1: - rootfs image partition needed to get UUID required for initramfs
 #param2: - location where grub.cfg file will be created.
 generate_grub_configuration()
 if [[ $# -lt 2 ]];then
@@ -55,37 +55,25 @@ EOF
 fi
 
 #Function installs GRUB bootloader
-#param1: - EFI partition
-#param2: - removable flag: true/false
+#param1: - path
 install_grub_bootloader(){
-if [[ $# -lt 2 ]];then
-    echo -e "Error: Missing boot or efi partition path(eg. /dev/sdaX)." >&2
+if [[ $# -lt 1 ]];then
+    echo -e "Error: Missing bootloader path(eg. /boot)." >&2
 else
-    local efipart=$1
-    local removable=
-    if [[ "$2" == "true" ]]; then
-        removable="--removable"
-    fi
-    echo "Mounting efi parition $efipart to /mnt"
-    mount $efipart /mnt
     echo "Installing grub bootloader ..."
-    grub-install --target=x86_64-efi -d /usr/lib/grub/x86_64-efi $removable --efi-directory=/mnt --boot-directory=/mnt --bootloader-id=LinuxInstaller 1>/dev/null
-    umount -R /mnt
+    mkdir -p $1/EFI/BOOT
+    grub-mkstandalone -d /usr/lib/grub/x86_64-efi --format=x86_64-efi --output=$1/EFI/BOOT/BOOTX64.EFI
 fi
 }
 
 #Function installs Limine bootloader
-#param1: - EFI partition
+#param1: - path
 install_limine_bootloader(){
 if [[ $# -lt 1 ]];then
-    echo -e "Error: Missing boot or efi partition path(eg. /dev/sdaX)." >&2
+    echo -e "Error: Missing bootloader path(eg. /boot)." >&2
 else
-    local efipart=$1
-    echo "Mounting efi parition $efipart to /mnt"
-    mount $efipart /mnt
     echo "Installing Limine bootloader ..."
-    mkdir -p /mnt/EFI/BOOT
-    rsync -ah --info=progress2 /usr/share/limine/BOOTX64.EFI /mnt/EFI/BOOT/BOOTX64.EFI
-    umount -R /mnt
+    mkdir -p $1/EFI/BOOT
+    cp /usr/share/limine/BOOTX64.EFI $1/EFI/BOOT/BOOTX64.EFI
 fi
 }

@@ -148,7 +148,7 @@ then
 exec /bin/sh
 else
 #Switch to new root
-mkdir -p /mnt/cdrom
+mkdir -p /mnt/rootfs
 mkdir -p /run/image/ro
 mkdir -p /run/image/rw/data
 mkdir -p /run/image/rw/work
@@ -166,8 +166,8 @@ fi
 sleep 0.5
 device=\$(blkid | sed -n "/\${uuid}/p" | sed 's/:.*//g')
 done
-mount -t ext4 \$device /mnt/cdrom
-mount -t squashfs -o defaults,ro /mnt/cdrom/live-install/rootfs.sfs /run/image/ro
+mount -t ext4 \$device /mnt/rootfs
+mount -t squashfs -o defaults,ro /mnt/rootfs/rootfs.sfs /run/image/ro
 mount -t overlay -o lowerdir=/run/image/ro,upperdir=/run/image/rw/data,workdir=/run/image/rw/work overlay /new_root
 udevadm control --exit
 udevadm info --cleanup-db

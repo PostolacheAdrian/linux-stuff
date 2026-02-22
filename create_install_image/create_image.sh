@@ -6,24 +6,19 @@ if [ "$(id -u)" -ne 0 ]; then
         exit 1
 fi
 
-if [[ $# -lt 1 ]]; then
-        echo -e "Error:\n\tYou should specify where it goes to final output:\n\ttmpfs - the output folder will be mounted in tmpfs\n\tstorage - the output folder will be on the disk" >&2
+if [[ $# -lt 2 ]]; then
+        echo -e "Error: Parameters are missing:\n\1. Storage type: tmpfs or staorage\n\t Destination path: eg. /home/user/image_folder." >&2
         exit 1
 else
         if [[ "$1" == "storage" || "$1" == "tmpfs" ]]; then
                 destination="$1"
+                destinationPath=$2
         else
                 echo -e "Error:\n\t\"$1\" is a bad argument\n\tUse tmpfs or storage" >&2
                 exit 1
         fi
 fi
-if [[ "$destination" == "storage" ]]; then
-        destinationPath=/home/live-install
-else
-        destinationPath=live-install
-fi
-
-rootFsPath=rootfs
+rootFsPath=$destinationPath/rootfs
 user_pass="\\\$6\\\$tQk2hzssD/a0tbe1\\\$bEnhqTMyzyhBJdRPKEUrku0iMFLSwMbpoGqU5vE07d7Toe37JYqAgzxRsTtOc1RNEWMvHmzutR7m22OlZA/ao/"
 download_file=archlinux-bootstrap-x86_64.tar.zst
 cleanup(){
@@ -42,19 +37,23 @@ error_handler() {
 
 trap 'error_handler $? $LINENO "$BASH_COMMAND"' ERR
 
-mkdir -p $rootFsPath
 if [ -d $destinationPath ] 
 then
 echo "$destinationPath already exists."
 echo "Removing $destinationPath"
 rm -rf $destinationPath
 fi
+echo "Creating directory $destinationPath/image"
+mkdir -p $destinationPath/image
+echo "Creating directory $destinationPath/boot"
+mkdir -p $destinationPath/boot
 echo "Creating directory $rootFsPath"
-mkdir -p $destinationPath
+mkdir -p $rootFsPath
 echo "Mounting $rootFsPath as tmpfs"
 mount -t tmpfs $rootFsPath $rootFsPath
 if [[ "$destination" == "tmpfs" ]];then
-mount -t tmpfs $destinationPath $destinationPath
+mount -t tmpfs $destinationPath/image $destinationPath/image
+mount -t tmpfs $destinationPath/boot $destinationPath/boot
 fi
 echo "Downloading arch bootstrap ..."
 curl https://fastly.mirror.pkgbuild.com/iso/2026.02.01/archlinux-bootstrap-x86_64.tar.zst -o $rootFsPath/$download_file
@@ -82,7 +81,7 @@ arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "mkdir -p /etc/pacman.d/hooks"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "ln -sf /dev/null /etc/pacman.d/hooks/60-mkinicpio-remove.hook"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "ln -sf /dev/null /etc/pacman.d/hooks/90-mkinicpio-install.hook"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "pacman -Syy"
-arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "yes|pacman -Syu base linux linux-firmware sudo intel-ucode pacman-contrib archinstall arch-install-scripts squashfs-tools limine efivar efibootmgr vim mc htop acpid acpi lm_sensors fastfetch git mtools dosfstools ntfs-3g wireless_tools iwd networkmanager dhcpcd busybox cpio mkinitcpio mkinitcpio-utils curl wget whois"
+arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "yes|pacman -Syu base linux linux-firmware sudo intel-ucode pacman-contrib archinstall arch-install-scripts squashfs-tools limine grub efivar efibootmgr vim mc htop acpid acpi lm_sensors fastfetch git mtools dosfstools ntfs-3g wireless_tools iwd networkmanager dhcpcd busybox cpio mkinitcpio mkinitcpio-utils curl wget whois"
 systemctl --root $rootFsPath/root.x86_64 enable acpid
 systemctl --root $rootFsPath/root.x86_64 enable dhcpcd
 systemctl --root $rootFsPath/root.x86_64 enable NetworkManager
@@ -100,9 +99,9 @@ arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "usermod -p \"$user_pass\" root
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "./root/create_initramfs.sh"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "yes|pacman -Scc"
 sed -i "/ExecStart=/s/=.*/=-\/sbin\/agetty --skip-login --noclear --nonewline --noissue --autologin live %I \$TERM/" $rootFsPath/root.x86_64/usr/lib/systemd/system/getty@.service
-mv $rootFsPath/root.x86_64/initramfs.img $destinationPath
-mv $rootFsPath/root.x86_64/boot/intel-ucode.img $destinationPath
-mv $rootFsPath/root.x86_64/boot/vmlinuz-linux $destinationPath
+mv $rootFsPath/root.x86_64/initramfs.img $destinationPath/boot
+mv $rootFsPath/root.x86_64/boot/intel-ucode.img $destinationPath/boot
+mv $rootFsPath/root.x86_64/boot/vmlinuz-linux $destinationPath/boot
 rm -rf $rootFsPath/root.x86_64/initramfs
 rm -rf $rootFsPath/root.x86_64/root/*
 rm -rf $rootFsPath/root.x86_64/boot/*
@@ -110,7 +109,25 @@ mkdir -p $rootFsPath/root.x86_64/root/create_install_image
 cp  *.sh $rootFsPath/root.x86_64/root/create_install_image
 cp -r ../installer $rootFsPath/root.x86_64/root
 cp -r ../utils $rootFsPath/root.x86_64/root/
-$rootFsPath/root.x86_64/bin/mksquashfs $rootFsPath/root.x86_64 $destinationPath/rootfs.sfs -wildcards -e  dev/* proc/* sys/* run/*
+echo "Generating bootloader files ..."
+
+if [[ "$3" == "limine" ]];then
+arch-chroot $rootFsPath/root.x86_64 /bin/bash << EOF
+set -e
+source /root/utils/bootloader_setup.sh
+install_limine_bootloader /boot
+EOF
+else
+if [[ "$3" == "grub" ]];then
+arch-chroot $rootFsPath/root.x86_64 /bin/bash << EOF
+set -e
+source /root/utils/bootloader_setup.sh
+install_grub_bootloader /boot true
+EOF
+fi
+fi
+mv $rootFsPath/root.x86_64/boot/* $destinationPath/boot
+$rootFsPath/root.x86_64/bin/mksquashfs $rootFsPath/root.x86_64 $destinationPath/image/rootfs.sfs -wildcards -e  dev/* proc/* sys/* run/*
 umount -R $rootFsPath/root.x86_64
 umount -R $rootFsPath
 rm -rf $rootFsPath
