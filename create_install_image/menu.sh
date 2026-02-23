@@ -38,7 +38,7 @@ export DIALOGRC="$THEME"
 
 BOOT_PARTITION=""
 ROOT_PARTITION=""
-BOOTLOADER_TYPE=""
+BOOTLOADER_TYPE="none"
 DESTINATION_PATH=""
 
 select_partition(){
@@ -70,7 +70,7 @@ select_bootloader(){
     local bl=$1
     local menu_title=$2
     local choice
-    choice=$(dialog --clear --title "$menu_title" --menu "Select bootloader from the list:" 0 0 2 "limine" "" "grub" "" 3>&1 1>&2 2>&3)
+    choice=$(dialog --clear --title "$menu_title" --menu "Select bootloader from the list:" 0 0 3 "none" "" "limine" "" "grub" "" 3>&1 1>&2 2>&3)
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
         printf -v "$bl" "%s" "$choice"
@@ -81,12 +81,32 @@ select_bootloader(){
 create_installer(){
     local max_height=$(tput lines)
     local max_width=$(tput cols)
+    local log_file=$(mktemp)
+    local destination="$1"
+    local bootloader="$2"
+    local boot_part="$3"
+    local root_part="$4"
+    local storage_type="local"
+    local copy_to_usb="no"
+
+    dialog --clear --title "USB Instalation" --yesno "Do you want to install to USB storage?" 12 55
+    if [[ $? -eq 0 ]]; then
+        if [[ ${#boot_part} -gt 0 && ${#root_part} -gt 0 ]]; then
+            copy_to_usb="yes"
+            storage_type="tmpfs"
+        else
+            dialog --title " Failed " --msgbox "You need to select the boot and root partitions !" 6 50
+            return
+        fi
+    fi
     if [[ $# -gt 0 ]]; then
-        stdbuf -oL -eL bash ./create_image.sh tmpfs $1 $2 2>&1 | tee out.log | dialog --clear --title " Installing... " --progressbox "Live Installation:" $max_height $max_width
+        stdbuf -oL -eL bash ./create_image.sh $storage_type $destination $bootloader $boot_part $root_part 2>&1 | tee $log_file | dialog --clear --title " Installing... " --progressbox "Live Installation:" $max_height $max_width
         if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
             dialog --title " Success " --msgbox "Images have been created !" 6 50
         else
-            dialog --title " Failed " --msgbox "Error ocurred! Check out.log file." 6 50
+            dialog --title " Failed " --msgbox "Error ocurred! Check $log_file file." 6 50
+            cat $log_file | dialog --clear --title " Error detected " --programbox "Error log view:" $max_height $max_width
+            rm -f $log_file
         fi
     else
         dialog --title " Error " --msgbox "Please specify the Linux installer path !" 6 50
@@ -119,8 +139,7 @@ main_choice=$(dialog --clear --title " Create Linux Installer " --menu "Configur
     "3" "Select the Bootloader [$status_bl]" \
     "4" "Linux installer path  [$status_path]" \
     "5" "Create Linux installer" \
-    "6" "Install to USB drive" \
-    "7" "Exit" \
+    "6" "Exit" \
     3>&1 1>&2 2>&3)
 
     exit_code=$?
@@ -136,9 +155,8 @@ main_choice=$(dialog --clear --title " Create Linux Installer " --menu "Configur
         2) select_partition ROOT_PARTITION "ROOT partition" ;;
         3) select_bootloader BOOTLOADER_TYPE "Bootloader" ;;
         4) specify_destination_path DESTINATION_PATH ;;
-        5) create_installer $DESTINATION_PATH $BOOTLOADER_TYPE ;;
-        6) install_to_drive ;;
-        7) break ;;
+        5) create_installer $DESTINATION_PATH $BOOTLOADER_TYPE $BOOT_PARTITION $ROOT_PARTITION ;;
+        6) break ;;
     esac
 done
 clear

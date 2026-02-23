@@ -7,14 +7,14 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if [[ $# -lt 2 ]]; then
-        echo -e "Error: Parameters are missing:\n\1. Storage type: tmpfs or staorage\n\t Destination path: eg. /home/user/image_folder." >&2
+        echo -e "Error: Parameters are missing:\n\1. Storage type: tmpfs or local\n\t Destination path: eg. /home/user/image_folder." >&2
         exit 1
 else
-        if [[ "$1" == "storage" || "$1" == "tmpfs" ]]; then
+        if [[ "$1" == "local" || "$1" == "tmpfs" ]]; then
                 destination="$1"
                 destinationPath=$2
         else
-                echo -e "Error:\n\t\"$1\" is a bad argument\n\tUse tmpfs or storage" >&2
+                echo -e "Error:\n\t\"$1\" is a bad argument\n\tUse tmpfs or local" >&2
                 exit 1
         fi
 fi
@@ -23,9 +23,15 @@ user_pass="\\\$6\\\$tQk2hzssD/a0tbe1\\\$bEnhqTMyzyhBJdRPKEUrku0iMFLSwMbpoGqU5vE0
 download_file=archlinux-bootstrap-x86_64.tar.zst
 cleanup(){
         
-        umount -R -q $rootFsPath/root.x86_64
-        umount -R -q $rootFsPath
-        rm -rf $rootFsPath
+        if [[ "$destination" == "tmpfs" ]];then
+                umount -R -q $destinationPath/*
+                rm -rf $destinationPath
+        else
+                if [[ "$destination" == "local" ]];then
+                        umount -R -q $rootFsPath
+                        rm -rf $destinationPath
+                fi
+        fi
 }
 error_handler() {
         echo "Script failed !" >&2
@@ -109,14 +115,16 @@ mkdir -p $rootFsPath/root.x86_64/root/create_install_image
 cp  *.sh $rootFsPath/root.x86_64/root/create_install_image
 cp -r ../installer $rootFsPath/root.x86_64/root
 cp -r ../utils $rootFsPath/root.x86_64/root/
-echo "Generating bootloader files ..."
 
+
+if [[ $# -gt 2 ]]; then
 if [[ "$3" == "limine" ]];then
 arch-chroot $rootFsPath/root.x86_64 /bin/bash << EOF
 set -e
 source /root/utils/bootloader_setup.sh
 install_limine_bootloader /boot
 EOF
+mv $rootFsPath/root.x86_64/boot/* $destinationPath/boot
 else
 if [[ "$3" == "grub" ]];then
 arch-chroot $rootFsPath/root.x86_64 /bin/bash << EOF
@@ -124,10 +132,50 @@ set -e
 source /root/utils/bootloader_setup.sh
 install_grub_bootloader /boot true
 EOF
-fi
-fi
 mv $rootFsPath/root.x86_64/boot/* $destinationPath/boot
+fi
+fi
+fi
 $rootFsPath/root.x86_64/bin/mksquashfs $rootFsPath/root.x86_64 $destinationPath/image/rootfs.sfs -wildcards -e  dev/* proc/* sys/* run/*
-umount -R $rootFsPath/root.x86_64
-umount -R $rootFsPath
-rm -rf $rootFsPath
+if [[ $# -gt 3 ]]; then
+        source ../utils/bootloader_setup.sh
+        if [[ "$3" == "limine" ]];then
+                generate_limine_configuration $5 $destinationPath/boot/EFI/BOOT
+        else
+        if [[ "$3" == "grub" ]];then
+                mkdir -p $destinationPath/boot/grub
+                generate_grub_configuration $5 $destinationPath/boot/grub
+        fi
+        fi
+        echo "Mounting USB boot partition..."
+        mount $4 /mnt
+        echo "Copying boot all files..."
+        rsync -ah --no-perms --no-owner --no-group --info=progress2 $destinationPath/boot/ /mnt/
+        umount -R -q /mnt
+        echo "Mounting USB root partition..."
+        mount $5 /mnt
+        echo "Copying rootfs squash image..."
+        rsync -ah --no-perms --no-owner --no-group --info=progress2 $destinationPath/image/rootfs.sfs /mnt/rootfs.sfs
+        umount -R -q /mnt
+        umount -R -q $destinationPath/*
+        rm -rf $destinationPath
+        echo "Done"
+else
+        if [[ $# -eq 3 ]]; then
+                source ../utils/bootloader_setup.sh
+                if [[ "$3" == "limine" ]];then
+                        part=$(df --output=source $destinationPath | tail -n 1)
+                        generate_limine_configuration $part $destinationPath/boot/EFI/BOOT
+                fi
+                if [[ "$3" == "grub" ]];then
+                        mkdir -p $destinationPath/boot/grub
+                        part=$(df --output=source $destinationPath | tail -n 1)
+                        generate_grub_configuration $part $destinationPath/boot/grub
+                fi
+                umount -R -q $rootFsPath
+                rm -rf $rootFsPath
+                echo "Done"
+        fi
+fi
+
+
