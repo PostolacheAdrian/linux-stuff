@@ -100,7 +100,8 @@ create_installer(){
         fi
     fi
     if [[ $# -gt 0 ]]; then
-        stdbuf -oL -eL bash ./create_image.sh $storage_type $destination $bootloader $boot_part $root_part 2>&1 | tee $log_file | dialog --clear --title " Installing... " --progressbox "Live Installation:" $max_height $max_width
+        ./create_image.sh $storage_type $destination $bootloader $boot_part $root_part 2>&1 | dialog --clear --title " Installing... " --programbox "Live Installation:" $max_height $max_width
+        #stdbuf -oL -eL bash ./create_image.sh $storage_type $destination $bootloader $boot_part $root_part 2>&1 | tee $log_file | dialog --clear --title " Installing... " --progressbox "Live Installation:" $max_height $max_width
         if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
             dialog --title " Success " --msgbox "Images have been created !" 6 50
         else

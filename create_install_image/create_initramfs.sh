@@ -6,14 +6,14 @@ if [ -d initramfs ]; then
 fi
 
 #Required modules
-MODULES_TO_LOAD="nvme ahci xhci_pci usb-storage ext4 sd_mod scsi_mod loop overlay squashfs atkbd ahci i8042 hid usbhid hid_generic"
+MODULES_TO_LOAD="intel_lpss intel_lpss_pci intel_pmc_core acpi_pad vmd xhci_pci ahci nvme-core nvme usb-storage scsi_mod sd_mod ext4 btrfs xfs vfat loop overlay squashfs atkbd i8042 i915 hid usbhid hid_generic"
 
 #Create working folder
 mkdir initramfs
 cd initramfs
 
 #Create folders structure
-mkdir -p dev etc root new_root sys proc usr/bin /usr/sbin usr/lib/modules usr/lib/modules/$KERNEL_VERSION usr/lib/systemd mnt run tmp var opt
+mkdir -p dev etc root new_root sys proc usr/bin /usr/sbin usr/lib/modules usr/lib/modules/$KERNEL_VERSION usr/lib/modprobe.d usr/lib/systemd mnt run tmp var opt
 
 #The function search for a specific module and its dependencies and copies to the initramfs
 copy_module(){
@@ -70,7 +70,7 @@ cp /lib/modules/$KERNEL_VERSION/modules.builtin.modinfo lib/modules/$KERNEL_VERS
 depmod -b $PWD ${KERNEL_VERSION}
 shopt -s extglob
 rm usr/lib/modules/${KERNEL_VERSION}/modules.!(*.bin|devname|softdep)
-
+cp -r /usr/lib/udev lib/
 #Required binaries
 binfiles="blkid mount kmod lsmod udevadm insmod rmmod modprobe depmod systemd-dissect systemd-tmpfiles"
 
@@ -131,14 +131,14 @@ chown root:tty /dev/tty
 echo "Loading kernel modules ..."
 
 /usr/lib/systemd/systemd-udevd --daemon --resolve-names=never
-udevadm trigger --action=add 
+udevadm trigger --action=add --type=subsystems
+udevadm trigger --action=add --type=devices
 udevadm settle > /tmp/udev_done
 
 if [ -f /tmp/udev_done ]; then
 #grep -h "MODALIAS\|DRIVER" /sys/bus/*/devices/*/uevent | cut -d= -f2 | xargs /usr/sbin/modprobe -abq 2> /dev/null
 #grep -h "MODALIAS\|DRIVER" /sys/bus/*/devices/*/uevent | cut -d= -f2 | xargs /usr/sbin/modprobe -abq 2> /dev/null
-/usr/sbin/modprobe -abq $MODULES_TO_LOAD
-
+/usr/sbin/modprobe -abq loop overlay squashfs
 fi
 
 #Execute the shell
