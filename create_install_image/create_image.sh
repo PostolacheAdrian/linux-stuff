@@ -85,7 +85,7 @@ arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "mkdir -p /etc/pacman.d/hooks"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "ln -sf /dev/null /etc/pacman.d/hooks/60-mkinicpio-remove.hook"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "ln -sf /dev/null /etc/pacman.d/hooks/90-mkinicpio-install.hook"
 arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "pacman -Syy"
-arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "yes|pacman -Syu base linux linux-firmware sudo intel-ucode pacman-contrib archinstall arch-install-scripts squashfs-tools limine grub efivar efibootmgr vim mc htop acpid acpi lm_sensors fastfetch git mtools dosfstools ntfs-3g wireless_tools iwd networkmanager dhcpcd busybox cpio mkinitcpio mkinitcpio-utils curl wget whois"
+arch-chroot $rootFsPath/root.x86_64 /bin/bash -c "yes|pacman -Syu base linux linux-firmware linux-firmware-whence sudo intel-ucode pacman-contrib archinstall arch-install-scripts squashfs-tools limine grub efivar efibootmgr vim mc htop acpid acpi lm_sensors fastfetch git mtools dosfstools ntfs-3g wireless_tools iwd networkmanager dhcpcd busybox cpio mkinitcpio mkinitcpio-utils curl wget whois"
 systemctl --root $rootFsPath/root.x86_64 enable acpid
 systemctl --root $rootFsPath/root.x86_64 enable dhcpcd
 systemctl --root $rootFsPath/root.x86_64 enable NetworkManager

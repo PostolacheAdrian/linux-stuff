@@ -6,14 +6,14 @@ if [ -d initramfs ]; then
 fi
 
 #Required modules
-MODULES_TO_LOAD="intel_lpss intel_lpss_pci intel_pmc_core acpi_pad vmd xhci_pci ahci nvme-core nvme usb-storage scsi_mod sd_mod ext4 btrfs xfs vfat loop overlay squashfs atkbd i8042 i915 hid usbhid hid_generic"
+MODULES_TO_LOAD="intel_lpss intel_lpss_pci intel_pmc_core acpi_pad vmd xhci_pci ehci_pci ahci nvme_core nvme usb_storage uas scsi_mod sd_mod ext4 btrfs xfs vfat loop overlay squashfs atkbd i8042 i915 hid usbhid hid_generic"
 
 #Create working folder
 mkdir initramfs
 cd initramfs
 
 #Create folders structure
-mkdir -p dev etc root new_root sys proc usr/bin /usr/sbin usr/lib/modules usr/lib/modules/$KERNEL_VERSION usr/lib/modprobe.d usr/lib/systemd mnt run tmp var opt
+mkdir -p dev etc root new_root sys proc usr/bin /usr/sbin usr/lib/modules usr/lib/modules/$KERNEL_VERSION usr/lib/modprobe.d mnt run tmp var opt
 
 #The function search for a specific module and its dependencies and copies to the initramfs
 copy_module(){
@@ -69,10 +69,10 @@ cp /lib/modules/$KERNEL_VERSION/modules.builtin lib/modules/$KERNEL_VERSION
 cp /lib/modules/$KERNEL_VERSION/modules.builtin.modinfo lib/modules/$KERNEL_VERSION
 depmod -b $PWD ${KERNEL_VERSION}
 shopt -s extglob
-rm usr/lib/modules/${KERNEL_VERSION}/modules.!(*.bin|devname|softdep)
-cp -r /usr/lib/udev lib/
+#rm usr/lib/modules/${KERNEL_VERSION}/modules.!(*.bin|devname|softdep)
+#cp -r /usr/lib/udev lib/
 #Required binaries
-binfiles="blkid mount kmod lsmod udevadm insmod rmmod modprobe depmod systemd-dissect systemd-tmpfiles"
+binfiles="blkid mount kmod lsmod insmod rmmod modprobe depmod"
 
 #Copy /bin files and libraries
 for f in $binfiles; do
@@ -87,8 +87,10 @@ for l in $libs; do
 	lnk=$(readlink -f $l)
 	[ -n "${lnk}" ] | cp ${lnk} usr/lib
 done
+
+#Copy kmod libs
 cp /usr/lib/libkmod* usr/lib
-cp usr/lib/libsystemd* usr/lib/systemd
+
 #Copy busybox and create symlinks
 cp /bin/busybox usr/bin
 symlinks=$(busybox --list | sed 's/\\n/ /g' | sed '/busybox\|mount\|modprobe\|insmod\|kmod\|rmmod\|modprobe\|blkid\|lsmod\|depmod/d')
@@ -97,12 +99,10 @@ for sl in  ${symlinks}; do
 	ln -sf busybox "$sl"
 done
 cd ../..
-#Copy udev
-cp -r /usr/lib/udev usr/lib
-#Create symlink to systemd-udevd
-cd usr/lib/systemd
-ln -s /usr/bin/udevadm systemd-udevd
-cd ../../..
+
+#create mdev configuration file
+echo '$MODALIAS=.* root:root 660 @modprobe -b "\$MODALIAS"' > etc/mdev.conf
+
 #Create init file
 cat > init << EOF
 #!/bin/sh
@@ -110,13 +110,13 @@ cat > init << EOF
 export PATH='/usr/bin:/usr/sbin'
 
 #Mount the kernel dependecies
-mount -t proc      proc      /proc -o nosuid,noexec,nodev
-mount -t sysfs     sysfs     /sys  -o nosuid,noexec,nodev
-mount -t devtmpfs  dev /dev -o mode=0755,nosuid
-mount -t tmpfs  run /run -o nosuid,nodev,mode=0755
-mount -t tmpfs tmp /tmp -o nosuid,nodev
+/bin/mount -t proc      proc      /proc -o nosuid,noexec,nodev
+/bin/mount -t sysfs     sysfs     /sys  -o nosuid,noexec,nodev
+/bin/mount -t devtmpfs  dev /dev -o mode=0755,nosuid
+/bin/mount -t tmpfs  run /run -o nosuid,nodev,mode=0755
+/bin/mount -t tmpfs tmp /tmp -o nosuid,nodev
 mkdir dev/pts
-mount -t devpts  devpts /dev/pts -o mode=0620
+/bin/mount -t devpts  devpts /dev/pts -o mode=0620
 
 # Create symlinks for standard file descriptors
 ln -s /proc/self/fd /dev/fd
@@ -128,24 +128,27 @@ ln -s /proc/self/mounts /etc/mtab
 chown root:tty /dev/console
 chown root:tty /dev/tty
 #Install all required kernel modules
+
 echo "Loading kernel modules ..."
-
-/usr/lib/systemd/systemd-udevd --daemon --resolve-names=never
-udevadm trigger --action=add --type=subsystems
-udevadm trigger --action=add --type=devices
-udevadm settle > /tmp/udev_done
-
-if [ -f /tmp/udev_done ]; then
-#grep -h "MODALIAS\|DRIVER" /sys/bus/*/devices/*/uevent | cut -d= -f2 | xargs /usr/sbin/modprobe -abq 2> /dev/null
-#grep -h "MODALIAS\|DRIVER" /sys/bus/*/devices/*/uevent | cut -d= -f2 | xargs /usr/sbin/modprobe -abq 2> /dev/null
+#Start mdev hardware discovery
+mdev -s
+sleep 3
+for modalias_file in \$(find /sys -name modalias);do
+    ALIAS=\$(cat \$modalias_file 2>/dev/null)
+    if [ -n "\$ALIAS" ]; then
+        /usr/sbin/modprobe -bq \$ALIAS
+    fi
+done
+mdev -s
+#Load filesystem modules
 /usr/sbin/modprobe -abq loop overlay squashfs
-fi
+
 
 #Execute the shell
 busybox_req=\$(xargs -n1 -a /proc/cmdline | sed '/^busybox/!d' | sed 's/.*=//g')
 if [ "\$busybox_req" == "ON" ]
 then
-exec /bin/sh
+exec setsid cttyhack sh
 else
 #Switch to new root
 mkdir -p /mnt/rootfs
@@ -159,23 +162,21 @@ while [ -z "\$device" ]
 do
 if [ \$time_out == 0 ]
 then
-break
+exec setsid cttyhack sh
 else
 time_out=\$((time_out - 1))
 fi
 sleep 0.5
 device=\$(blkid | sed -n "/\${uuid}/p" | sed 's/:.*//g')
 done
-mount -t ext4 \$device /mnt/rootfs
-mount -t squashfs -o defaults,ro /mnt/rootfs/rootfs.sfs /run/image/ro
-mount -t overlay -o lowerdir=/run/image/ro,upperdir=/run/image/rw/data,workdir=/run/image/rw/work overlay /new_root
-udevadm control --exit
-udevadm info --cleanup-db
-mount -n -o move /run /new_root/run
-mount -n -o move /tmp /new_root/tmp
-mount -n -o move /dev /new_root/dev
-mount -n -o move /sys /new_root/sys
-mount -n -o move /proc /new_root/proc
+/bin/mount -t ext4 \$device /mnt/rootfs
+/bin/mount -t squashfs -o loop,defaults,ro /mnt/rootfs/rootfs.sfs /run/image/ro
+/bin/mount -t overlay -o lowerdir=/run/image/ro,upperdir=/run/image/rw/data,workdir=/run/image/rw/work overlay /new_root
+/bin/mount -n -o move /run /new_root/run
+/bin/mount -n -o move /tmp /new_root/tmp
+/bin/mount -n -o move /dev /new_root/dev
+/bin/mount -n -o move /sys /new_root/sys
+/bin/mount -n -o move /proc /new_root/proc
 exec switch_root -c /dev/console /new_root /sbin/init "\$@"
 fi
 EOF
